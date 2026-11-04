@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pomodoro 55/5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f6f5f2; --card:#ffffff; --ink:#1d1d1f; --muted:#8a8a8e; --line:#e7e5e0;
+    --focus:#d9534f; --focus-soft:#fbeceb;
+    --break:#3a9d6e; --break-soft:#e7f4ed;
+    --accent:var(--focus); --accent-soft:var(--focus-soft);
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#141414; --card:#1e1e1f; --ink:#f2f2f2; --muted:#8e8e93; --line:#2c2c2e;
+           --focus:#ff6b63; --focus-soft:#3a2321; --break:#4cc38a; --break-soft:#1c3328; }
+  }
+  body.break{ --accent:var(--break); --accent-soft:var(--break-soft); }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    background:var(--bg); color:var(--ink);
+    display:flex; align-items:center; justify-content:center; padding:24px;
+    transition:background .4s;
+  }
+  .card{
+    width:100%; max-width:380px; background:var(--card); border:1px solid var(--line);
+    border-radius:28px; padding:28px 28px 24px; text-align:center;
+    box-shadow:0 10px 30px rgba(0,0,0,.05);
+  }
+  .tabs{display:inline-flex; background:var(--bg); border-radius:999px; padding:4px; gap:4px; margin-bottom:22px}
+  .tab{font:500 13px Inter,sans-serif; color:var(--muted); padding:7px 16px; border-radius:999px; border:0; background:none; cursor:pointer}
+  .tab.on{background:var(--card); color:var(--ink); box-shadow:0 1px 3px rgba(0,0,0,.08)}
+  .ring{position:relative; width:260px; height:260px; margin:0 auto}
+  .ring svg{transform:rotate(-90deg)}
+  .ring circle{fill:none; stroke-width:10}
+  .track{stroke:var(--accent-soft)}
+  .prog{stroke:var(--accent); stroke-linecap:round; transition:stroke-dashoffset .25s linear, stroke .4s}
+  .center{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center}
+  .time{font-size:58px; font-weight:600; letter-spacing:-1.5px; font-variant-numeric:tabular-nums}
+  .label{font-size:14px; color:var(--muted); margin-top:4px}
+  .controls{display:flex; justify-content:center; align-items:center; gap:14px; margin-top:26px}
+  button.main{
+    width:120px; height:48px; border-radius:999px; border:0; background:var(--accent); color:#fff;
+    font:600 16px Inter,sans-serif; cursor:pointer; transition:transform .1s, background .4s;
+  }
+  button.main:active{transform:scale(.97)}
+  button.icon{
+    width:44px; height:44px; border-radius:50%; border:1px solid var(--line); background:var(--card);
+    color:var(--ink); cursor:pointer; display:flex; align-items:center; justify-content:center;
+  }
+  button.icon svg{width:18px; height:18px}
+  .dots{display:flex; justify-content:center; gap:8px; margin-top:26px; min-height:10px; flex-wrap:wrap}
+  .dot{width:9px; height:9px; border-radius:50%; background:var(--focus)}
+  .stats{font-size:13px; color:var(--muted); margin-top:10px}
+  .opts{display:flex; justify-content:center; gap:18px; margin-top:18px; padding-top:16px; border-top:1px solid var(--line); font-size:13px; color:var(--muted)}
+  .opts label{display:flex; align-items:center; gap:6px; cursor:pointer}
+  .opts input{accent-color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="tabs">
+    <button class="tab on" id="tFocus">Studio · 55</button>
+    <button class="tab" id="tBreak">Pausa · 5</button>
+  </div>
+
+  <div class="ring">
+    <svg width="260" height="260" viewBox="0 0 260 260">
+      <circle class="track" cx="130" cy="130" r="120"/>
+      <circle class="prog" id="prog" cx="130" cy="130" r="120"/>
+    </svg>
+    <div class="center">
+      <div class="time" id="time">55:00</div>
+      <div class="label" id="label">Tempo di studio</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="icon" id="reset" title="Ricomincia">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg>
+    </button>
+    <button class="main" id="go">Inizia</button>
+    <button class="icon" id="skip" title="Salta alla fase successiva">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l10 7-10 7z"/><path d="M19 5v14"/></svg>
+    </button>
+  </div>
+
+  <div class="dots" id="dots"></div>
+  <div class="stats" id="stats">Nessuna sessione completata oggi</div>
+
+  <div class="opts">
+    <label><input type="checkbox" id="optSound" checked> Suono</label>
+    <label><input type="checkbox" id="optAuto" checked> Avvio automatico</label>
+  </div>
+</div>
+
+<script>
+const DUR = { focus: 55*60, break: 5*60 };
+const C = 2*Math.PI*120;
+const $ = id => document.getElementById(id);
+const prog = $('prog');
+prog.style.strokeDasharray = C;
+
+let mode = 'focus', remaining = DUR.focus, running = false, endAt = 0, tick = null, actx = null;
+
+// Persistenza leggera: sessioni completate oggi
+const today = new Date().toISOString().slice(0,10);
+let done = 0;
+try { const s = JSON.parse(localStorage.getItem('pomo55') || '{}'); if (s.day === today) done = s.done || 0; } catch(e){}
+function save(){ try { localStorage.setItem('pomo55', JSON.stringify({day:today, done})); } catch(e){} }
+
+function fmt(s){ const m = Math.floor(s/60), r = s%60; return String(m).padStart(2,'0')+':'+String(r).padStart(2,'0'); }
+
+function render(){
+  const s = Math.ceil(remaining);
+  $('time').textContent = fmt(s);
+  prog.style.strokeDashoffset = C * (1 - remaining/DUR[mode]);
+  document.body.classList.toggle('break', mode === 'break');
+  $('label').textContent = mode === 'focus' ? 'Tempo di studio' : 'Pausa';
+  $('tFocus').classList.toggle('on', mode === 'focus');
+  $('tBreak').classList.toggle('on', mode === 'break');
+  $('go').textContent = running ? 'Pausa' : (remaining < DUR[mode] ? 'Riprendi' : 'Inizia');
+  document.title = running ? `${fmt(s)} · ${mode==='focus'?'Studio':'Pausa'}` : 'Pomodoro 55/5';
+  $('dots').innerHTML = '<span class="dot"></span>'.repeat(Math.min(done, 12));
+  const h = Math.floor(done*55/60), m = (done*55)%60;
+  $('stats').textContent = done
+    ? `${done} session${done===1?'e':'i'} oggi · ${h ? h+' h ' : ''}${m ? m+' min' : ''} di studio`.replace(/\s+$/,'')
+    : 'Nessuna sessione completata oggi';
+}
+
+function beep(){
+  if (!$('optSound').checked || !actx) return;
+  try {
+    const notes = mode === 'focus' ? [660, 880, 990] : [990, 880, 660];
+    notes.forEach((f, i) => {
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i*0.22;
+      o.type = 'sine'; o.frequency.value = f;
+      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(0.25, t+0.02); g.gain.exponentialRampToValueAtTime(0.001, t+0.5);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t+0.55);
+    });
+  } catch(e){}
+}
+
+function loop(){
+  remaining = Math.max(0, (endAt - Date.now())/1000);
+  if (remaining <= 0) return finish();
+  render();
+}
+
+function start(){
+  if (!actx) { try { actx = new (window.AudioContext||window.webkitAudioContext)(); } catch(e){} }
+  try { actx && actx.resume(); } catch(e){}
+  running = true; endAt = Date.now() + remaining*1000;
+  clearInterval(tick); tick = setInterval(loop, 250); render();
+}
+function pause(){ running = false; clearInterval(tick); loop(); running = false; render(); }
+
+function switchTo(m, autostart){
+  clearInterval(tick); running = false; mode = m; remaining = DUR[m]; render();
+  if (autostart) start();
+}
+
+function finish(){
+  clearInterval(tick); running = false; remaining = 0;
+  if (mode === 'focus') { done++; save(); }
+  beep();
+  switchTo(mode === 'focus' ? 'break' : 'focus', $('optAuto').checked);
+}
+
+$('go').onclick = () => running ? pause() : start();
+$('reset').onclick = () => switchTo(mode, false);
+$('skip').onclick = () => switchTo(mode === 'focus' ? 'break' : 'focus', false);
+$('tFocus').onclick = () => switchTo('focus', false);
+$('tBreak').onclick = () => switchTo('break', false);
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target.tagName !== 'INPUT') { e.preventDefault(); $('go').click(); } });
+
+render();
+</script>
+</body>
+</html>
